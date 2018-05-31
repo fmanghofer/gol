@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: GameOfLife.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: GameOfLife.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * Game of Life web component base class
+ */
+(function () {
+
+
+  // Constant definitions
+
+  /** 
+   * @global
+   * @constant
+   * @type {number}
+   * @default
+   */
+  const defaultSizeX = 10;
+
+  /** 
+   * @global
+   * @constant
+   * @type {number}
+   * @default
+   */
+  const defaultSizeY = 10;
+
+  /**
+   * @global
+   * @constant
+   * @type {number}
+   * @default
+   */
+  const defaultGodMode = false;
+
+  /** 
+   * @global
+   * @constant
+   * @type {number}
+   * @default
+   */
+  const currentDocument = document.currentScript.ownerDocument;
+
+
+
+  /**
+   * Represants the Game of Life web component.
+   * @author Florian Manghofer &lt;f.manghofer@googlemail.com>
+   * @copyright Florian Manghofer 2018
+   */
+  class GameOfLife extends HTMLElement {
+
+    /**
+     * Changes in this attributes should be observed
+     */
+    static get observedAttributes() {
+      return ['sizex', 'sizey', 'godmode'];
+    }
+
+    /**
+     * Represants the Game of Life web component.
+     * @constructor
+     * @augments HTMLElement
+     */
+    constructor() {
+      super();
+      this.attachShadow({
+        mode: 'open'
+      });
+
+      /**
+       * Game field size x
+       * @member
+       * @type {number}
+       */
+      this.sizeX;
+
+      /**
+       * Game field size y
+       * @member
+       * @type {number}
+       */
+      this.sizeY;
+
+      /**
+       * Game field div DOM Element - contains the grid
+       * @member
+       * @type {?HTMLDivElement}
+       */
+      this.fieldRoot = null; // game field
+
+      /**
+       * Game engine instance
+       * @member
+       * @type {GameEngine}
+       */
+      this.oGameEngine = new GameEngine(this);
+      const template = currentDocument.querySelector('#game-of-life');
+
+      /**
+       * Reference to the shadow root
+       * @member
+       * @type {ShadowRoot}
+       */
+      this.shadowRoot.appendChild(template.content.cloneNode(true));
+    }
+
+    /**
+     * Will be called during the web component lifecycle when element is connected to document´s DOM
+     * @listens Window:resize
+     */
+    connectedCallback() {
+      // convert html attribute sizex to js attribute
+      if (!this.hasAttribute('sizex')) {
+        this.sizeX = defaultSizeX;
+      } else {
+        try {
+          this.sizeX = parseInt(this.getAttribute('sizex'));
+        } catch (err) {
+          console.log("Error converting x to int. Fallback to default.");
+          this.sizeX = defaultSizeX;
+        }
+      }
+      // convert html attribute sizey to js attribute
+      if (!this.hasAttribute('sizey')) {
+        this.sizeY = defaultSizeY;
+      } else {
+        try {
+          this.sizeY = parseInt(this.getAttribute('sizey'));
+        } catch (err) {
+          console.log("Error converting y to int. Fallback to default.");
+          this.sizeY = defaultSizeY;
+        }
+      }
+      // convert html attribute godmode to js value
+      let godMode = defaultGodMode;
+      if (this.hasAttribute('godmode')) {
+        godMode = (this.getAttribute('godmode') == 'true'); // parse to boolean
+      }
+
+      // setup the game field
+      this.fieldRoot = document.createElement('div');
+      this.fieldRoot.classList.add('grid-wrapper');
+      this.shadowRoot.appendChild(this.fieldRoot);
+      this.measureField();
+
+      // setup the game engine
+      this.oGameEngine.setup(this.sizeX, this.sizeY, this.fieldRoot);
+      this.oGameEngine.setGodMode(godMode);
+      this.oGameEngine.setRandomPattern(); // by default, generate a random pattern
+
+      // listen to window resizes to stay responsible
+      window.addEventListener('resize', this.measureField.bind(this));
+    }
+
+    /**
+     * Plays the next generation
+     */
+    play() {
+      this.oGameEngine.nextCycle();
+    }
+
+    /**
+     * Starts a new game
+     * Game field will be reset
+     */
+    newGame() {
+      this.oGameEngine.setRandomPattern(true);
+    }
+
+    /**
+     * Measures the game field to fit in the current screen resolution
+     * Game field and cell size will be adopted as cells should always be presented as squares
+     * The game field should always be visible completly without scrollbars
+     */
+    measureField() {
+      let percentageSizeX = 1;
+      let percentageSizeY = 1;
+      //calculate all sizes based on ratios to stay responsive
+      if (this.fieldRoot.offsetHeight > this.fieldRoot.offsetWidth) {
+        percentageSizeX = 100 / this.sizeX;
+        let absoluteX = this.fieldRoot.offsetWidth * percentageSizeX;
+        percentageSizeY = absoluteX / this.fieldRoot.offsetHeight;
+        if (percentageSizeY * this.sizeY > 100) { // we´ve to rescale the square, as y is now smaller
+          let scaledPercentageSizeY = 100 / this.sizeY;
+          let absoluteY = this.fieldRoot.offsetHeight * scaledPercentageSizeY;
+          percentageSizeX = absoluteY / this.fieldRoot.offsetWidth;
+          percentageSizeY = scaledPercentageSizeY;
+        }
+      } else {
+        percentageSizeY = 100 / this.sizeY;
+        let absoluteY = this.fieldRoot.offsetHeight * percentageSizeY;
+        percentageSizeX = absoluteY / this.fieldRoot.offsetWidth;
+        if (percentageSizeX * this.sizeX > 100) { // we´ve to rescale the square, as x is now smaller
+          let scaledPercentageSizeX = 100 / this.sizeX;
+          let absoluteX = this.fieldRoot.offsetWidth * scaledPercentageSizeX;
+          percentageSizeY = absoluteX / this.fieldRoot.offsetHeight
+          percentageSizeX = scaledPercentageSizeX;
+        }
+
+      }
+
+
+      percentageSizeY = percentageSizeY + '%';
+      percentageSizeX = percentageSizeX + '%';
+
+      // update css variables
+      document.documentElement.style.setProperty('--rows', this.sizeY);
+      document.documentElement.style.setProperty('--cols', this.sizeX);
+      document.documentElement.style.setProperty('--cellWidth', percentageSizeX);
+      document.documentElement.style.setProperty('--cellHeight', percentageSizeY);
+    }
+
+    /**
+     * Will be called during the web component lifecycle when element is disconnected from document´s DOM
+     * */
+    disconnectedCallback() {
+      // Event Listeners unsubscribe
+      window.removeEventListener('resize', this.measureField.bind(this));
+    }
+
+    /**
+     * Will be called during the web component lifecycle when values of obsorved attributes change
+     * @param {String} name - name of attribute
+     * @param {*} oldValue - value of attribute before change
+     * @param {*} newValue - value of attribute after change
+     * */
+    attributeChangedCallback(name, oldValue, newValue) {
+      switch (name) {
+        case 'sizex':
+          { // prevent initial trigger affected by rendering
+            if (oldValue == null) {
+              return;
+            }
+            try {
+              let sizeX = parseInt(newValue);
+              this._setSizeX(sizeX);
+            } catch (err) {
+              console.log("Error converting x to int.");
+            }
+            break;
+          }
+        case 'sizey':
+          {
+            if (oldValue == null) { // prevent initial trigger affected by rendering
+              return;
+            }
+            try {
+              let sizeY = parseInt(newValue);
+              this._setSizeY(sizeY);
+            } catch (err) {
+              console.log("Error converting y to int.");
+            }
+            break;
+          }
+        case 'godmode':
+          {
+            this.oGameEngine.setGodMode((newValue == 'true')); // parse to boolean
+            break;
+          }
+      }
+    }
+
+    /**
+     * Set the x size of the game field
+     * @param {number} sizeX - x value - number fo columns 
+     */
+    _setSizeX(sizeX) {
+      this.sizeX = sizeX;
+      this.measureField();
+      this.oGameEngine.adaptSizeX(sizeX);
+    }
+
+    /**
+     * Set the y size of the game field
+     * @param {number} sizeY - y value - number of rows
+     */
+    _setSizeY(sizeY) {
+      this.sizeY = sizeY;
+      this.measureField();
+      this.oGameEngine.adaptSizeY(sizeY);
+    }
+  }
+
+  // make web component available for consumers
+  window.customElements.define('game-of-life', GameOfLife);
+})();
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Cell.html">Cell</a></li><li><a href="GameEngine.html">GameEngine</a></li><li><a href="GameOfLife.html">GameOfLife</a></li></ul><h3>Events</h3><ul><li><a href="GameEngine.html#event:Finish">Finish</a></li><li><a href="GameEngine.html#event:GenerationManipulated">GenerationManipulated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#currentDocument">currentDocument</a></li><li><a href="global.html#defaultGodMode">defaultGodMode</a></li><li><a href="global.html#defaultSizeX">defaultSizeX</a></li><li><a href="global.html#defaultSizeY">defaultSizeY</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.5</a> on Thu May 31 2018 23:33:38 GMT+0200 (Mitteleuropäische Sommerzeit)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

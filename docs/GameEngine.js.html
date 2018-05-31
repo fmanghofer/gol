@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: GameEngine.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: GameEngine.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * Class contains and implements the Game of Life logic.
+ * @author Florian Manghofer &lt;f.manghofer@googlemail.com>
+ * @copyright Florian Manghofer 2018
+ */
+class GameEngine {
+
+  /**
+   * Represents a game Engine
+   * @constructor
+   * @param {HTMLElement} oRoot - Root DOMElement of the web component
+   */
+  constructor(oRoot) {
+    /** Array contains all cells of the game
+     * @member
+     * @type {Cell[]}
+     */
+    this.oCells = new Array();
+
+    /**
+     * Game field size x (number of columns)
+     * @member
+     * @type {number} 
+     */
+    this.sizeX = 0;
+
+    /**
+     * Game field size y (number of rows)
+     * @member
+     * @type {number}
+     */
+    this.sizeY = 0;
+
+    /**
+     * Total number of existing cells on the game field
+     * Will be calculated, should not set manually
+     * @member
+     * @type {number}
+     */
+    this.totalCells = 0;
+
+    /**
+     * Number of alive cells on the game field
+     * Will be calculated, should not set manually
+     * @member
+     * @type {number}
+     */
+    this.aliveCells = 0;
+
+    /**
+     * Reference to the root DOMElement
+     * @member
+     * @type {HTMLElement}
+     */
+    this.oRoot = oRoot;
+
+    /**
+     * Generation
+     * @member
+     * @type {number}
+     */
+    this.generationCount = 0;
+
+    /**
+     * God/editable mode state on or off
+     * @member
+     * @default
+     * @type {boolean}
+     */
+    this.godMode = false;
+  }
+
+  /**
+   * Setup the game.
+   * Cells will be created and rendered.
+   * Cell neighbour relations are created.
+   * @param {number} sizeX - field size x
+   * @param {number} sizeY - field size y
+   * @param {HTMLDivElement} oGameFieldDOMElement - DOM Element of the game field
+   */
+  setup(sizeX, sizeY, oGameFieldDOMElement) {
+    this.sizeX = sizeX;
+    this.sizeY = sizeY;
+    this.oGameFieldDOMElement = oGameFieldDOMElement;
+    Cell.sizeX = this.sizeX;
+    this.totalCells = this.sizeX * this.sizeY;
+    this._generateCells();
+    this._generateNeighbours();
+  }
+
+
+  /**
+   * Setter of god mode
+   * @param {boolean} godMode - true if cells should be clickable, false if not
+   */
+  setGodMode(godMode) {
+    this.godMode = godMode;
+  }
+
+  /**
+   * Getter for god mode
+   * @return {boolean} - true if cells are clickable, false if not
+   */
+  isGodMode() {
+    return this.godMode;
+  }
+
+  /**
+   * Set a new size y of the game field during runtime.
+   * Game field will be adjusted.
+   * @param {number} newSizeY - new number of rows
+   */
+  adaptSizeY(newSizeY) {
+    if (newSizeY > this.sizeY) { // number is bigger as the current one -> rows should be added
+      let index = this.totalCells - 1; // number of current cells, array starts with 0
+      this.totalCells = this.sizeX * newSizeY;
+      while (index &lt; this.totalCells - 1) { // add new cells until new number of cells is reached
+        this.oCells.push(this._createCell(index));
+        ++index;
+      }
+    } else if (newSizeY &lt; this.sizeY) { // -> rows should be removed
+      let index = this.totalCells - 1;
+      this.totalCells = this.sizeX * newSizeY;
+      while (index > this.totalCells - 1) { // remove cells until new number of cells is reached
+        this.oCells.pop();
+        --index;
+      }
+    }
+
+    this.sizeY = newSizeY;
+
+    this._refreshCells(); // refresh all calls to match new array structure
+  }
+
+  /**
+   * Set a new size x of the game field during runtime.
+   * Game field will be adjusted.
+   * @param {number} newSizeX - new number of columns
+   */
+  adaptSizeX(newSizeX) {
+    //compared to y adaption this is way more complex as we want to keep the cell instances alive
+    Cell.sizeX = newSizeX; // tell the cells the new x
+    let i = this.sizeX; // starting point is current x
+    let enhancePositions = new Array(); // array to copy the original cell structure, which will not be affected by adding or removing cells
+
+    while (i &lt; this.totalCells) { // go through all cells and add them to the array
+      enhancePositions.push(i - 1);
+      i += this.sizeX;
+    }
+    enhancePositions.push(i - 1); // also add the last one
+
+    //enhancePositions contains now all cell objects from x until end of list
+    let itemCounter = 0;
+    if (newSizeX > this.sizeX) { // columns should be added
+      let dif = newSizeX - this.sizeX; // how many columns do we need?
+      for (let j = 0; j &lt; enhancePositions.length; j++) {
+        let y = 0;
+        while (y &lt; dif) { // add the needed columns
+          let offset = 0;
+          this.oCells.splice(enhancePositions[j] + itemCounter + 1, 0, this._createCell(enhancePositions[j] + y)); // add the columns always after current x
+          ++y;
+          ++itemCounter;
+        }
+      }
+    } else if (newSizeX &lt; this.sizeX) { // columns should be removed
+      let dif = this.sizeX - newSizeX; // how many columns?
+      for (let j = 0; j &lt; enhancePositions.length; j++) {
+        this.oCells.splice(enhancePositions[j] - itemCounter, dif); // remove cells 
+        itemCounter += dif;
+      }
+    }
+
+    this.sizeX = newSizeX;
+    this.totalCells = this.sizeX * this.sizeY;
+
+    this._refreshCells(); // refresh all calls to match new array structure
+  }
+
+  /**
+   * Set a random dead - alive pattern on the game field
+   * @param {boolean} reset - if current game field should be reset
+   */
+  setRandomPattern(reset) {
+    if (reset == true) { // if reset, set game field vanilla
+      if (this.aliveCells > 0) {
+        for (let oCell of this.oCells) { // kill all current alive cells
+          oCell.kill();
+        }
+        this.aliveCells = 0;
+        this.generationCount = 0;
+      }
+    }
+    // how many cells should be alive?
+    // range can be between 30 and 70 %
+    let percentage = 0;
+    do {
+      percentage = Math.random();
+    } while (percentage &lt; 0.3 || percentage > 0.7);
+
+    let numberAlive = this.totalCells * percentage;
+    let counter = 0;
+
+    // set alive cells randomly 
+    while (counter &lt; numberAlive) {
+      this._getRandomCell().revive();
+      ++this.aliveCells;
+      ++counter;
+    }
+    this.changeAliveCellsNumber(this.aliveCells);
+  }
+
+  /**
+   * Plays the next generation cycle
+   * @fires GameEngine#Finish
+   * @fires GameEngine#GenerationManipulated
+   */
+  nextCycle() {
+    let oCellsToKill = new Array(); // store all cell instances to kill
+    let oCellsToRevive = new Array(); // store all cell instances to revive
+
+    // we have to loop through all cells to determine, 
+    // which cells should be killed and which should be revived based on the game rules
+    // copy the result in the corresponding array as we cannot set the cell´s state instantly
+    // otherwise the determination of alive neighbours would be wrong
+    for (let oCell of this.oCells) {
+      let aliveNeighbours = oCell.getAliveNeighbours();
+      if (oCell.isAlive()) {
+        switch (aliveNeighbours) {
+          case 2:
+            {
+              break;
+            }
+          case 3:
+            {
+              break;
+            }
+          default:
+            {
+              oCellsToKill.push(oCell);
+            }
+        }
+      } else {
+        if (aliveNeighbours == 3) {
+          oCellsToRevive.push(oCell);
+        }
+      }
+    }
+
+    // first kill
+    for (let oCell of oCellsToKill) {
+      oCell.kill();
+    }
+    this.aliveCells -= oCellsToKill.length;
+
+    // and then revive
+    for (let oCell of oCellsToRevive) {
+      oCell.revive();
+    }
+
+    this.aliveCells += oCellsToRevive.length;
+    ++this.generationCount;
+
+    this._onAfterCellStateChanged();
+  }
+
+  /**
+   * Change the number of alive cells
+   * Should be called whenever the state of a cell is changed
+   * @param {number} n - number of revived cells or negative number of killed cells
+   * @fires Finish
+   * @fires GenerationManipulated
+   */
+  changeAliveCellsNumber(n) {
+    this.aliveCells += n;
+    this._onAfterCellStateChanged();
+  }
+
+  /**
+   * Is called when the state of cells have changed.
+   * Fires events which can be handled by the consumers of the web component
+   * @private
+   */
+  _onAfterCellStateChanged() {
+    if (this.aliveCells == 0) { // if no alive cells left, send finish event
+      /**
+       * Game finish event.
+       * No Alive cells are left.
+       * @event GameEngine#Finish
+       * @type {object}
+       * @property {number} detail.generation - the current generation 
+       */
+      this.oRoot.dispatchEvent(new CustomEvent("Finish", {
+        bubbling: true,
+        detail: {
+          generation: () => this.generationCount
+        }
+      }));
+    } else { // otherwise send the manipulation event
+      /**
+       * Generation manipulated event.
+       * Cell states has been manipulated.
+       * @event GameEngine#GenerationManipulated
+       * @type {object}
+       * @property {number} detail.generation - the current generation 
+       */
+      this.oRoot.dispatchEvent(new CustomEvent("GenerationManipulated", {
+        bubbling: true,
+        detail: {
+          generation: () => this.generationCount
+        }
+      }));
+    }
+  }
+
+  /**
+   * Create a new cell instance
+   * @private
+   * @param {number} index - index in the cell array
+   */
+  _createCell(index) {
+    return new Cell(index, false, this); // cells are dead by default
+  }
+
+  /**
+   * Redraw all cells
+   * @private
+   */
+  _redrawCells() {
+    // first remove all childs
+    while (this.oGameFieldDOMElement.firstChild) {
+      this.oGameFieldDOMElement.removeChild(this.oGameFieldDOMElement.firstChild);
+    }
+
+    // redraw them
+    for (let oCell of this.oCells) {
+      let oDom = oCell.getDOMElement();
+      this.oGameFieldDOMElement.appendChild(oDom);
+    }
+  }
+
+  /**
+   * Generate all cells for the game field
+   * @private
+   */
+  _generateCells() {
+    let i = 0;
+    while (i &lt; this.totalCells) {
+      let oCell = this._createCell(i);
+      this.oGameFieldDOMElement.appendChild(oCell.getDOMElement());
+      this.oCells.push(oCell);
+      ++i;
+    }
+  }
+
+  /**
+   * Get a random  dead cell of the game field
+   * @private
+   * @return {Cell} - Cell instance
+   */
+  _getRandomCell() {
+    let oCell = null;
+    do {
+      oCell = this.oCells[Math.floor(Math.random() * this.oCells.length)];
+    } while (oCell.isAlive()); // we only want dead cells
+    return oCell;
+  }
+
+  /**
+   * Refresh all cells of the game field
+   * @private
+   */
+  _refreshCells() {
+    let entryIndex = 0;
+    for (let oCellEntry of this.oCells) {
+      oCellEntry.setIndex(entryIndex); //set new index
+      ++entryIndex;
+    }
+
+    this._redrawCells(); //redraw them to update the ui
+    this._generateNeighbours(); //also refresh the neighbours as they might have changed
+  }
+
+  /**
+   * Generate neighbour relations for all cells of the game field
+   * @private
+   */
+  _generateNeighbours() {
+    // set neighbours
+    for (let cellEntry of this.oCells) {
+      this._setNeighbours(cellEntry);
+    }
+  }
+
+  /**
+   * Determine neighbour relations for a certain cell
+   * @private
+   * @param {Cell} oCell - Cell instance
+   */
+  _setNeighbours(oCell) {
+    // up left
+    oCell.setNeighbour('UPLEFT', this._calcNeighbourUp(oCell, -1));
+
+    // up
+    oCell.setNeighbour('UP', this._calcNeighbourUp(oCell, 0));
+
+    // up right
+    oCell.setNeighbour('UPRIGHT', this._calcNeighbourUp(oCell, 1));
+
+    // left
+    oCell.setNeighbour('LEFT', this._calcNeighbourLeftRight(oCell, -1));
+
+    // right
+    oCell.setNeighbour('RIGHT', this._calcNeighbourLeftRight(oCell, 1));
+
+    // down left
+    oCell.setNeighbour('DOWNLEFT', this._calcNeighbourDown(oCell, -1));
+
+    // down
+    oCell.setNeighbour('DOWN', this._calcNeighbourDown(oCell, 0));
+
+    // down right
+    oCell.setNeighbour('DOWNRIGHT', this._calcNeighbourDown(oCell, 1));
+  }
+
+  /**
+   * Find a upper neighbour cell
+   * @private
+   * @param {Cell} oCell - Base cell instance 
+   * @param {*} offset - ENUM key UPLEFT|UP|UPRIGHT
+   */
+  _calcNeighbourUp(oCell, offset) {
+    //handle edge cases
+    if (oCell.getIndex() == 0 &amp;&amp; offset &lt; 0) { // first element in list and left needed
+      return this.oCells[this.totalCells - 1]; // return last element in list
+    }
+
+    if (oCell.getPosX() == 0 &amp;&amp; offset &lt; 0) { // first element in row and left needed
+      return this.oCells[oCell.getIndex() - 1]; // return previous element in list  
+    }
+
+    let index = 0;
+
+    if (oCell.getPosX() == (this.sizeX - 1) &amp;&amp; offset > 0) { // last element in row and right needed
+      index = oCell.getIndex() - this.sizeX * 2 + 1;
+      if (index &lt; 0) {
+        index = this.totalCells + index;
+      }
+      return this.oCells[index]; // return first element of row above
+    }
+
+    index = oCell.getIndex() + offset - this.sizeX;
+    if (index &lt; 0) {
+      index = this.totalCells + index;
+    }
+    return this.oCells[index];
+  }
+
+  /**
+   * Find a right or left neighbour cell
+   * @private
+   * @param {Cell} oCell - Base cell instance 
+   * @param {*} offset - ENUM key LEFT|RIGHT
+   */
+  _calcNeighbourLeftRight(oCell, offset) {
+    if (oCell.getPosX() == 0 &amp;&amp; offset &lt; 0) { // first element in row and left needed
+      return this.oCells[oCell.getIndex() + this.sizeX - 1]; // return last element in row
+    }
+    if (oCell.getPosX() == (this.sizeX - 1) &amp;&amp; offset > 0) { // last element in row and right needed
+      return this.oCells[oCell.getIndex() - this.sizeX + 1]; // return first element in row
+    }
+    let index = oCell.getIndex() + offset;
+    return this.oCells[index];
+  }
+
+  /**
+   * Find a neighbour cell below
+   * @private
+   * @param {Cell} oCell - Base cell instance 
+   * @param {*} offset - ENUM key DOWNLEFT|DOWN|DOWNRIGHT
+   */
+  _calcNeighbourDown(oCell, offset) {
+    if (oCell.getPosX() == 0 &amp;&amp; oCell.getPosY() == (this.sizeY - 1) &amp;&amp; offset &lt; 0) { // first element in last row and left needed
+      return this.oCells[this.sizeX - 1]; // return last element of first row
+    }
+
+    if (oCell.getPosX() == 0 &amp;&amp; offset &lt; 0) { // first element in row and left needed
+      return this.oCells[oCell.getIndex() + 2 * this.sizeX - 1]; // return last element of next row
+    }
+
+    let index = 0;
+
+    if (oCell.getPosX() == (this.sizeX - 1) &amp;&amp; offset > 0) { // last element in row and right needed
+      index = oCell.getIndex() + 1;
+      if (index >= this.totalCells) {
+        index = 0;
+      }
+      return this.oCells[index];
+    }
+
+    index = oCell.getIndex() + offset + this.sizeX;
+    if (index >= this.totalCells) {
+      index = index - this.totalCells;
+    }
+    return this.oCells[index];
+  }
+
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Cell.html">Cell</a></li><li><a href="GameEngine.html">GameEngine</a></li><li><a href="GameOfLife.html">GameOfLife</a></li></ul><h3>Events</h3><ul><li><a href="GameEngine.html#event:Finish">Finish</a></li><li><a href="GameEngine.html#event:GenerationManipulated">GenerationManipulated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#currentDocument">currentDocument</a></li><li><a href="global.html#defaultGodMode">defaultGodMode</a></li><li><a href="global.html#defaultSizeX">defaultSizeX</a></li><li><a href="global.html#defaultSizeY">defaultSizeY</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.5</a> on Thu May 31 2018 23:33:38 GMT+0200 (Mitteleuropäische Sommerzeit)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

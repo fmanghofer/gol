@@ -1,21 +1,23 @@
-# gol
+# Game of Life
 
-> Game of Life
+Implementation of Convay's Game of Life as a web component packed with an Vue.js based UI.
 
-## Build Setup
+## Installation
+
+First of all, make sure Node.js is installed.
 
 ``` bash
-# install dependencies
+# install all dependencies
 npm install
 
-# serve with hot reload at localhost:8080
+# run at localhost:8080 
 npm run dev
 
-# build for production with minification
-npm run build
-
-# build for production and view the bundle analyzer report
-npm run build --report
 ```
 
-For a detailed explanation on how things work, check out the [guide](http://vuejs-templates.github.io/webpack/) and [docs for vue-loader](http://vuejs.github.io/vue-loader).
+## Usage
+The application should be running in all major browsers, Chrome, Firefox, Safari and Edge.
+
+## Documentation
+All documentation is done with jsDoc.
+
