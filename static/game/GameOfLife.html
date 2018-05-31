@@ -1,0 +1,55 @@
+<!-- 
+    Web component css definition and dependency injections
+-->
+<template id="game-of-life">
+    <style>
+        :root{
+            --rows: 10;
+            --cols: 10;
+            --cellWidth: 1%;
+            --cellHeight: 1%;
+        }
+
+        :host{
+            --aliveColor: #062F4F;
+            --deadColor: #FFFFFF;
+            --gridBorderColor: #373737;
+            --gridBorderSize: 1px;
+        }
+        
+        .grid-wrapper{
+            display: grid;
+            width: 100%;
+            height: 100%;
+            position:relative;
+            grid-template-columns: repeat(var(--cols), var(--cellWidth));
+            grid-template-rows: repeat(var(--rows), var(--cellHeight));
+            justify-content: center;
+        }
+        
+        .grid-item {
+            position: relative;
+            border: 1px solid;
+            border-color: var(--gridBorderColor);
+            display:block;
+            box-sizing: border-box;
+            background-color: var(--deadColor);
+            transition: background-color 0.5s;
+            transition-timing-function: ease-out;
+        }
+        
+        .grid-item .content {
+            position: absolute;
+            top: 0; left: 0;
+            height: 100%;
+            width: 100%;
+        }
+        
+        .alive{
+            background-color: var(--aliveColor);
+        }
+    </style>
+</template>
+<script src="./Cell.js"></script>
+<script src="./GameEngine.js"></script>
+<script src="./GameOfLife.js"></script>
