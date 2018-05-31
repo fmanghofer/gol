@@ -164,7 +164,6 @@ export default {
      * @param {KeyboardEvent} oEvent - Focus event object
      */
     onXKeyDown: function(oEvent) {
-      alert(oEvent);
       if (oEvent.keyCode === 13) {
         this.onXChanged();
       }
