@@ -18,6 +18,7 @@
                 </div>
             </div>
             <div class="fullHeight margin inline">
+                <span class="gradient black">Generation: {{ generationCounter }}</span>
                 <a v-on:click="onNextButtonClicked" :disabled="nextButtonDisabled" class="btn gradient black">Nächster Zyklus</a>
                 <a v-on:click="onStartEvolutionButtonClicked" v-show="!evolutionRunning" class="btn gradient black">Evolution starten</a>
                 <a v-on:click="onEndEvolutionButtonClicked" v-show="evolutionRunning" class="btn gradient black">Evolution stoppen</a>
@@ -49,7 +50,7 @@ export default {
       godMode: true,
       evolutionRunning: false, // binding for evolution buttons
       nextButtonDisabled: false, // binding for next button state
-      generationCounter: 0,
+      generationCounter: 0, // binding for generation counter
       sizeY: 25, // binding for web component x
       sizeX: 35, // binding for web component y
       oGameInstance: null // web component instance
